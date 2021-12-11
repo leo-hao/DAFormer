@@ -1,15 +1,19 @@
 # The ema model and the domain-mixing are based on:
 # https://github.com/vikolss/DACS
-
+# 使用ImageNet特征距离的UDA自我训练的实现
 import math
 import os
 import random
+# 用copy模块下的deepcopy函数，防止元素被误改
 from copy import deepcopy
 
 import mmcv
 import numpy as np
 import torch
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt6
+'''
+PyTorch Image Models (timm)是一个图像模型（models）、层（layers）、实用程序（utilities）、优化器（optimizers）、调度器（schedulers）、数据加载/增强（data-loaders / augmentations）和参考训练/验证脚本（reference training / validation scripts）的集合，目的是将各种SOTA模型组合在一起，从而能够重现ImageNet的训练结果。
+'''
 from timm.models.layers import DropPath
 from torch.nn.modules.dropout import _DropoutNd
 
@@ -21,7 +25,7 @@ from mmseg.models.utils.dacs_transforms import (denorm, get_class_masks,
 from mmseg.models.utils.visualization import subplotimg
 from mmseg.utils.utils import downscale_label_ratio
 
-
+# ema model 和 model 参数相等判断
 def _params_equal(ema_model, model):
     for ema_param, param in zip(ema_model.named_parameters(),
                                 model.named_parameters()):
@@ -30,12 +34,14 @@ def _params_equal(ema_model, model):
             return False
     return True
 
-
+# 求范数 默认2范数：平方和 的 开方
 def calc_grad_magnitude(grads, norm_type=2.0):
     norm_type = float(norm_type)
+    # 如果 是无穷范数 即 最大的 绝对值
     if norm_type == math.inf:
         norm = max(p.abs().max() for p in grads)
     else:
+        # stack 沿着一个新维度对输入张量序列进行连接。 序列中所有的张量都应该为相同形状。
         norm = torch.norm(
             torch.stack([torch.norm(p, norm_type) for p in grads]), norm_type)
 
@@ -50,9 +56,11 @@ class DACS(UDADecorator):
         self.local_iter = 0
         self.max_iters = cfg['max_iters']
         self.alpha = cfg['alpha']
+        # 伪标签阈值
         self.pseudo_threshold = cfg['pseudo_threshold']
         self.psweight_ignore_top = cfg['pseudo_weight_ignore_top']
         self.psweight_ignore_bottom = cfg['pseudo_weight_ignore_bottom']
+        # imageNet 特征距离 λ
         self.fdist_lambda = cfg['imnet_feature_dist_lambda']
         self.fdist_classes = cfg['imnet_feature_dist_classes']
         self.fdist_scale_min_ratio = cfg['imnet_feature_dist_scale_min_ratio']
@@ -72,23 +80,33 @@ class DACS(UDADecorator):
         ema_cfg = deepcopy(cfg['model'])
         self.ema_model = build_segmentor(ema_cfg)
 
+        # 使用 imagenet 模型距离
         if self.enable_fdist:
             self.imnet_model = build_segmentor(deepcopy(cfg['model']))
         else:
             self.imnet_model = None
 
+    # 获得 ema 模型
     def get_ema_model(self):
         return get_module(self.ema_model)
 
+    # 获得 imageNet 模型
     def get_imnet_model(self):
         return get_module(self.imnet_model)
 
+    # 初始化ema权重
     def _init_ema_weights(self):
         for param in self.get_ema_model().parameters():
+            # 在x->y->z传播中，如果我们对y进行detach()，梯度还是能正常传播的
+            # 但如果我们对y进行detach_()，就把x->y->z切成两部分：x和y->z，x就无法接受到后面传过来的梯度
+            # 截断反向传播的梯度流。
             param.detach_()
+
+        # 获取两个模型的参数
         mp = list(self.get_model().parameters())
         mcp = list(self.get_ema_model().parameters())
         for i in range(0, len(mp)):
+            # ？？
             if not mcp[i].data.shape:  # scalar tensor
                 mcp[i].data = mp[i].data.clone()
             else:
@@ -107,6 +125,7 @@ class DACS(UDADecorator):
                     alpha_teacher * ema_param[:].data[:] + \
                     (1 - alpha_teacher) * param[:].data[:]
 
+    # 只有训练迭代步骤，反向传播和优化更新在优化器钩子
     def train_step(self, data_batch, optimizer, **kwargs):
         """The iteration step during training.
 
@@ -142,23 +161,29 @@ class DACS(UDADecorator):
         outputs = dict(
             log_vars=log_vars, num_samples=len(data_batch['img_metas']))
         return outputs
-
+    # 特征掩膜的距离
     def masked_feat_dist(self, f1, f2, mask=None):
         feat_diff = f1 - f2
         # mmcv.print_log(f'fdiff: {feat_diff.shape}', 'mmseg')
+        # 2范数
         pw_feat_dist = torch.norm(feat_diff, dim=1, p=2)
         # mmcv.print_log(f'pw_fdist: {pw_feat_dist.shape}', 'mmseg')
         if mask is not None:
             # mmcv.print_log(f'fd mask: {mask.shape}', 'mmseg')
+            # 去除第2维
             pw_feat_dist = pw_feat_dist[mask.squeeze(1)]
             # mmcv.print_log(f'fd masked: {pw_feat_dist.shape}', 'mmseg')
         return torch.mean(pw_feat_dist)
-
+    
+    # 计算图像和真实特征距离
     def calc_feat_dist(self, img, gt, feat=None):
         assert self.enable_fdist
         with torch.no_grad():
+            # 获得ImageNet的评估
             self.get_imnet_model().eval()
+            # 提取imagenet的特征
             feat_imnet = self.get_imnet_model().extract_feat(img)
+            # 分离出特征
             feat_imnet = [f.detach() for f in feat_imnet]
         lay = -1
         if self.fdist_classes is not None:
