@@ -10,7 +10,7 @@ from .decode_head import BaseDecodeHead
 from .segformer_head import MLP
 from .sep_aspp_head import DepthwiseSeparableASPPModule
 
-
+# ASPP 包装类
 class ASPPWrapper(nn.Module):
 
     def __init__(self,
@@ -29,6 +29,7 @@ class ASPPWrapper(nn.Module):
         self.align_corners = align_corners
         if pool:
             self.image_pool = nn.Sequential(
+                # 我们只需要关注输出维度的大小 output_size ，具体的实现过程和参数选择自动帮你确定了
                 nn.AdaptiveAvgPool2d(1),
                 ConvModule(
                     in_channels,
