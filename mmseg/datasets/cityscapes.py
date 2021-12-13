@@ -36,7 +36,8 @@ class CityscapesDataset(CustomDataset):
             img_suffix='_leftImg8bit.png',
             seg_map_suffix='_gtFine_labelTrainIds.png',
             **kwargs)
-
+    
+    # id转为标签
     @staticmethod
     def _convert_to_label_id(result):
         """Convert trainId to id for cityscapes."""
@@ -49,6 +50,7 @@ class CityscapesDataset(CustomDataset):
 
         return result_copy
 
+    # 将分割结果写入图片
     def results2img(self, results, imgfile_prefix, to_label_id):
         """Write the segmentation results to images.
 
@@ -90,6 +92,7 @@ class CityscapesDataset(CustomDataset):
 
         return result_files
 
+    # 将结果转成标准格式
     def format_results(self, results, imgfile_prefix=None, to_label_id=True):
         """Format the results into dir (standard format for Cityscapes
         evaluation).
