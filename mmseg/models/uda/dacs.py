@@ -205,7 +205,8 @@ class DACS(UDADecorator):
             {'loss_imnet_feat_dist': feat_dist})
         feat_log.pop('loss', None)
         return feat_loss, feat_log
-
+    
+    # 向前训练
     def forward_train(self, img, img_metas, gt_semantic_seg, target_img,
                       target_img_metas):
         """Forward function for training.
@@ -227,7 +228,7 @@ class DACS(UDADecorator):
         batch_size = img.shape[0]
         dev = img.device
 
-        # Init/update ema model
+        # Init/update ema model 初始化和更新 ema model
         if self.local_iter == 0:
             self._init_ema_weights()
             # assert _params_equal(self.get_ema_model(), self.get_model())
@@ -248,7 +249,7 @@ class DACS(UDADecorator):
             'std': stds[0].unsqueeze(0)
         }
 
-        # Train on source images
+        # Train on source images 在源图片上训练
         clean_losses = self.get_model().forward_train(
             img, img_metas, gt_semantic_seg, return_feat=True)
         src_feat = clean_losses.pop('features')
@@ -263,7 +264,7 @@ class DACS(UDADecorator):
             grad_mag = calc_grad_magnitude(seg_grads)
             mmcv.print_log(f'Seg. Grad.: {grad_mag}', 'mmseg')
 
-        # ImageNet feature distance
+        # ImageNet feature distance 特征距离
         if self.enable_fdist:
             feat_loss, feat_log = self.calc_feat_dist(img, gt_semantic_seg,
                                                       src_feat)
@@ -278,7 +279,7 @@ class DACS(UDADecorator):
                 grad_mag = calc_grad_magnitude(fd_grads)
                 mmcv.print_log(f'Fdist Grad.: {grad_mag}', 'mmseg')
 
-        # Generate pseudo-label
+        # Generate pseudo-label 生成伪标签
         for m in self.get_ema_model().modules():
             if isinstance(m, _DropoutNd):
                 m.training = False
@@ -304,7 +305,7 @@ class DACS(UDADecorator):
             pseudo_weight[:, -self.psweight_ignore_bottom:, :] = 0
         gt_pixel_weight = torch.ones((pseudo_weight.shape), device=dev)
 
-        # Apply mixing
+        # Apply mixing 混合
         mixed_img, mixed_lbl = [None] * batch_size, [None] * batch_size
         mix_masks = get_class_masks(gt_semantic_seg)
 
@@ -320,7 +321,7 @@ class DACS(UDADecorator):
         mixed_img = torch.cat(mixed_img)
         mixed_lbl = torch.cat(mixed_lbl)
 
-        # Train on mixed images
+        # Train on mixed images 在混合图片上训练
         mix_losses = self.get_model().forward_train(
             mixed_img, img_metas, mixed_lbl, pseudo_weight, return_feat=True)
         mix_losses.pop('features')
