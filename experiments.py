@@ -2,7 +2,7 @@ import itertools
 import logging
 import math
 
-
+# 获得基模型
 def get_model_base(architecture, backbone):
     architecture = architecture.replace('sfa_', '')
     architecture = architecture.replace('_nodbn', '')
@@ -29,6 +29,7 @@ def get_model_base(architecture, backbone):
     }[architecture]
 
 
+# 获得预训练文件
 def get_pretraining_file(backbone):
     if 'mitb5' in backbone:
         return 'pretrained/mit_b5.pth'
@@ -48,6 +49,7 @@ def get_pretraining_file(backbone):
     }[backbone]
 
 
+# 获得主干设置
 def get_backbone_cfg(backbone):
     for i in [1, 2, 3, 4, 5]:
         if backbone == f'mitb{i}':
@@ -99,7 +101,7 @@ def get_backbone_cfg(backbone):
         },
     }[backbone]
 
-
+# 更新解码器的通道数
 def update_decoder_in_channels(cfg, architecture, backbone):
     cfg.setdefault('model', {}).setdefault('decode_head', {})
     if 'dlv3p' in architecture and 'mit' in backbone:
@@ -109,13 +111,14 @@ def update_decoder_in_channels(cfg, architecture, backbone):
     return cfg
 
 
+# 设置少量类采样
 def setup_rcs(cfg, temperature):
     cfg.setdefault('data', {}).setdefault('train', {})
     cfg['data']['train']['rare_class_sampling'] = dict(
         min_pixels=3000, class_temp=temperature, min_crop_ratio=0.5)
     return cfg
 
-
+# 生成实验ID
 def generate_experiment_cfgs(id):
 
     def config_from_vars():
@@ -131,8 +134,10 @@ def generate_experiment_cfgs(id):
             'pretrained': get_pretraining_file(backbone),
             'backbone': get_backbone_cfg(backbone),
         }
+        # segFormerAdapter
         if 'sfa_' in architecture_mod:
             cfg['model']['neck'] = dict(type='SegFormerAdapter')
+        # norm decode head
         if '_nodbn' in architecture_mod:
             cfg['model'].setdefault('decode_head', {})
             cfg['model']['decode_head']['norm_cfg'] = None
