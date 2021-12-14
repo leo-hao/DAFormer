@@ -1,7 +1,9 @@
 import argparse
 import json
 import os
+# subprocess 模块允许我们启动一个新进程，并连接到它们的输入/输出/错误管道，从而获取返回值。
 import subprocess
+# UUID（Universally Unique Identifier）是通用唯一识别码
 import uuid
 from datetime import datetime
 
@@ -12,13 +14,15 @@ from tools import train
 
 
 def run_command(command):
+    # Popen 是 subprocess的核心，子进程的创建和管理都靠它处理。
     p = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
     for line in iter(p.stdout.readline, b''):
         print(line.decode('utf-8'), end='')
 
-
+# 来实现将服务器端的文件备份到客户端来
 def rsync(src, dst):
+    # f’{}’ 用法等同于 format用法的简单使用，更加方便
     rsync_cmd = f'rsync -a {src} {dst}'
     print(rsync_cmd)
     run_command(rsync_cmd)
@@ -26,6 +30,8 @@ def rsync(src, dst):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    # ArgumentParser.add_mutually_exclusive_group(required=False) 创建一个互斥组。 argparse 将会确保互斥组中只有一个参数在命令行中可用
+    # required=True，表示在互斥组中至少有一个参数是需要的:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         '--exp',
@@ -50,6 +56,7 @@ if __name__ == '__main__':
     cfgs, config_files = [], []
 
     # Training with Predefined Config
+    # 从预训练的config开始训练
     if args.config is not None:
         cfg = Config.fromfile(args.config)
         # Specify Name and Work Directory
